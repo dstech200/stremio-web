@@ -172,6 +172,7 @@ const StreamsList = ({ className, video, ...props }) => {
                                             progress={stream.progress}
                                             deepLinks={stream.deepLinks}
                                             onClick={stream.onClick}
+                                            lastUsed={stream.lastUsed}
                                         />
                                     ))}
                                     {
@@ -193,7 +194,7 @@ const StreamsList = ({ className, video, ...props }) => {
 StreamsList.propTypes = {
     className: PropTypes.string,
     streams: PropTypes.arrayOf(PropTypes.object).isRequired,
-    video: PropTypes.object
+    video: PropTypes.object,
 };
 
 module.exports = StreamsList;
