@@ -1,27 +1,25 @@
 // Copyright (C) 2017-2024 Smart code 203358507
 
-import { useEffect, useRef } from 'react';
+import { RefObject, useEffect } from 'react';
 
-const useOutsideClick = (callback: () => void) => {
-    const ref = useRef<HTMLDivElement>(null);
-
+const useOutsideClick = (ref: RefObject<HTMLDivElement>, callback: () => void) => {
     useEffect(() => {
+        if (!ref?.current) return;
+
         const handleClickOutside = (event: MouseEvent | TouchEvent) => {
             if (ref.current && !ref.current.contains(event.target as Node)) {
                 callback();
             }
         };
 
-        document.addEventListener('mouseup', handleClickOutside);
-        document.addEventListener('touchend', handleClickOutside);
+        document.addEventListener('mousedown', handleClickOutside, true);
+        document.addEventListener('touchstart', handleClickOutside, true);
 
         return () => {
-            document.removeEventListener('mouseup', handleClickOutside);
-            document.removeEventListener('touchend', handleClickOutside);
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('touchstart', handleClickOutside);
         };
-    }, [callback]);
-
-    return ref;
+    }, [ref, callback]);
 };
 
 export default useOutsideClick;

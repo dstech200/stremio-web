@@ -5,11 +5,12 @@ const PropTypes = require('prop-types');
 const classnames = require('classnames');
 const { useTranslation } = require('react-i18next');
 const { usePlatform, useToast } = require('stremio/common');
+const { default: useOutsideClick } = require('stremio/common/useOutsideClick');
 const { useServices } = require('stremio/services');
 const Option = require('./Option');
 const styles = require('./styles');
 
-const OptionsMenu = ({ className, stream, playbackDevices }) => {
+const OptionsMenu = ({ menuRef, className, stream, playbackDevices, style, onOutsideClick }) => {
     const { t } = useTranslation();
     const { core } = useServices();
     const platform = usePlatform();
@@ -69,8 +70,13 @@ const OptionsMenu = ({ className, stream, playbackDevices }) => {
     const onMouseDown = React.useCallback((event) => {
         event.nativeEvent.optionsMenuClosePrevented = true;
     }, []);
+
+    useOutsideClick(menuRef, () => {
+        if (typeof onOutsideClick === 'function') onOutsideClick();
+    });
+
     return (
-        <div className={classnames(className, styles['options-menu-container'])} onMouseDown={onMouseDown}>
+        <div ref={menuRef} style={style} className={classnames(className, styles['options-menu-container'])} onMouseDown={onMouseDown}>
             {
                 streamingUrl || downloadUrl ?
                     <Option
@@ -110,9 +116,15 @@ const OptionsMenu = ({ className, stream, playbackDevices }) => {
 };
 
 OptionsMenu.propTypes = {
+    menuRef: PropTypes.oneOfType([
+        PropTypes.func,
+        PropTypes.shape({ current: PropTypes.any })
+    ]),
     className: PropTypes.string,
     stream: PropTypes.object,
-    playbackDevices: PropTypes.array
+    playbackDevices: PropTypes.array,
+    style: PropTypes.object,
+    onOutsideClick: PropTypes.func
 };
 
 module.exports = OptionsMenu;

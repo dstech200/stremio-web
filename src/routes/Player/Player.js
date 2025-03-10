@@ -49,6 +49,7 @@ const Player = ({ urlParams, queryParams }) => {
     const [casting, setCasting] = React.useState(() => {
         return chromecast.active && chromecast.transport.getCastState() === cast.framework.CastState.CONNECTED;
     });
+    const playbackDevices = React.useMemo(() => streamingServer.playbackDevices !== null && streamingServer.playbackDevices.type === 'Ready' ? streamingServer.playbackDevices.content : [], [streamingServer]);
 
     const [immersed, setImmersed] = React.useState(true);
     const setImmersedDebounced = React.useCallback(debounce(setImmersed, 3000), []);
@@ -61,9 +62,15 @@ const Player = ({ urlParams, queryParams }) => {
     const [statisticsMenuOpen, , closeStatisticsMenu, toggleStatisticsMenu] = useBinaryState(false);
     const [nextVideoPopupOpen, openNextVideoPopup, closeNextVideoPopup] = useBinaryState(false);
     const [sideDrawerOpen, , closeSideDrawer, toggleSideDrawer] = useBinaryState(false);
+    const [contextMenuOpen, openContextMenu, closeContextMenu] = useBinaryState(false);
+    const [contextCoords, setContextCoords] = React.useState({
+        x: -document.documentElement.clientWidth,
+        y: -document.documentElement.clientHeight,
+    });
+    const contextMenuRef = React.useRef(null);
 
     const menusOpen = React.useMemo(() => {
-        return optionsMenuOpen || subtitlesMenuOpen || audioMenuOpen || speedMenuOpen || statisticsMenuOpen || sideDrawerOpen;
+        return optionsMenuOpen || subtitlesMenuOpen || audioMenuOpen || speedMenuOpen || statisticsMenuOpen || sideDrawerOpen || contextMenuOpen;
     }, [optionsMenuOpen, subtitlesMenuOpen, audioMenuOpen, speedMenuOpen, statisticsMenuOpen, sideDrawerOpen]);
 
     const closeMenus = React.useCallback(() => {
@@ -73,6 +80,7 @@ const Player = ({ urlParams, queryParams }) => {
         closeSpeedMenu();
         closeStatisticsMenu();
         closeSideDrawer();
+        closeContextMenu();
     }, []);
 
     const overlayHidden = React.useMemo(() => {
@@ -223,13 +231,17 @@ const Player = ({ urlParams, queryParams }) => {
         }
     }, [player.nextVideo]);
 
-    const onVideoClick = React.useCallback(() => {
-        if (video.state.paused !== null) {
-            if (video.state.paused) {
-                onPlayRequestedDebounced();
-            } else {
-                onPauseRequestedDebounced();
+    const onVideoClick = React.useCallback((e) => {
+        if (e.type === 'click') {
+            if (video.state.paused !== null) {
+                if (video.state.paused) {
+                    onPlayRequestedDebounced();
+                } else {
+                    onPauseRequestedDebounced();
+                }
             }
+        } else if (e.type === 'contextmenu') {
+            onContextMenu(e);
         }
     }, [video.state.paused]);
 
@@ -238,6 +250,63 @@ const Player = ({ urlParams, queryParams }) => {
         onPauseRequestedDebounced.cancel();
         toggleFullscreen();
     }, [toggleFullscreen]);
+
+    const handleContextMenuPosition = (clientX, clientY) => {
+        const safeAreaTop = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-top)')) || 0;
+        const safeAreaRight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-right)')) || 0;
+        const safeAreaBottom = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-bottom)')) || 0;
+        const safeAreaLeft = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-left)')) || 0;
+
+        const maxX = document.documentElement.clientWidth - safeAreaRight;
+        const maxY = document.documentElement.clientHeight - safeAreaBottom;
+        const menuX = clientX < safeAreaLeft
+            ? safeAreaLeft
+            : clientX > maxX
+                ? maxX
+                : clientX;
+        const menuY = clientY < safeAreaTop
+            ? safeAreaTop
+            : clientY > maxY
+                ? maxY
+                : clientY;
+
+        const menuSize = contextMenuRef?.current?.getBoundingClientRect();
+        const adjustedX = menuX + menuSize.width > maxX ? menuX - menuSize.width : menuX;
+        const adjustedY = menuY + menuSize.height > maxY ? menuY - menuSize.height : menuY;
+
+        setContextCoords({
+            x: adjustedX,
+            y: adjustedY,
+        });
+    };
+
+    const onContextMenu = React.useCallback((e) => {
+        e.preventDefault();
+        const { clientX, clientY } = e;
+        handleContextMenuPosition(clientX, clientY);
+        openContextMenu();
+    }, [contextMenuRef]);
+
+    const onTouchStart = (event) => {
+        const touch = event.touches[0];
+        handleContextMenuPosition(touch.clientX, touch.clientY);
+    };
+
+    const onTouchEnd = () => {
+        openContextMenu();
+    };
+
+    React.useEffect(() => {
+        if (!contextMenuOpen) {
+            const menuSize = contextMenuRef?.current?.getBoundingClientRect();
+            if (menuSize?.width && menuSize?.height) {
+                setContextCoords({
+                    x: -menuSize.width,
+                    y: -menuSize.height,
+                });
+            }
+        }
+    }, [contextMenuOpen]);
 
     const onContainerMouseDown = React.useCallback((event) => {
         if (!event.nativeEvent.optionsMenuClosePrevented) {
@@ -633,7 +702,7 @@ const Player = ({ urlParams, queryParams }) => {
             />
             {
                 !video.state.loaded ?
-                    <div className={classnames(styles['layer'], styles['background-layer'])}>
+                    <div className={classnames(styles['layer'], styles['background-layer'])} onContextMenu={onContextMenu} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
                         <img className={styles['image']} src={player?.metaItem?.content?.background} />
                     </div>
                     :
@@ -641,7 +710,7 @@ const Player = ({ urlParams, queryParams }) => {
             }
             {
                 (video.state.buffering || !video.state.loaded) && !error ?
-                    <BufferingLoader className={classnames(styles['layer'], styles['buffering-layer'])} logo={player?.metaItem?.content?.logo} />
+                    <BufferingLoader className={classnames(styles['layer'], styles['buffering-layer'])} logo={player?.metaItem?.content?.logo} onContextMenu={onContextMenu} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} />
                     :
                     null
             }
@@ -670,6 +739,27 @@ const Player = ({ urlParams, queryParams }) => {
                     :
                     null
             }
+            {
+                player.selected?.stream ?
+                    <OptionsMenu
+                        menuRef={contextMenuRef}
+                        style={
+                            {
+                                zIndex: contextMenuOpen ? 1 : -1,
+                                top: `${contextCoords.y}px`,
+                                left: `${contextCoords.x}px`,
+                                right: 'auto',
+                                bottom: 'auto'
+                            }
+                        }
+                        className={classnames(styles['layer'], styles['menu-layer'])}
+                        stream={player.selected.stream}
+                        playbackDevices={playbackDevices}
+                        onOutsideClick={closeContextMenu}
+                    />
+                    :
+                    null
+            }
             <HorizontalNavBar
                 className={classnames(styles['layer'], styles['nav-bar-layer'])}
                 title={player.title !== null ? player.title : ''}
@@ -677,12 +767,18 @@ const Player = ({ urlParams, queryParams }) => {
                 fullscreenButton={true}
                 onMouseMove={onBarMouseMove}
                 onMouseOver={onBarMouseMove}
+                onContextMenu={onContextMenu}
+                onTouchStart={onTouchStart}
+                onTouchEnd={onTouchEnd}
             />
             {
                 player.metaItem?.type === 'Ready' ?
                     <SideDrawerButton
                         className={classnames(styles['layer'], styles['side-drawer-button-layer'])}
                         onClick={toggleSideDrawer}
+                        onContextMenu={onContextMenu}
+                        onTouchStart={onTouchStart}
+                        onTouchEnd={onTouchEnd}
                     />
                     :
                     null
@@ -717,6 +813,9 @@ const Player = ({ urlParams, queryParams }) => {
                 onToggleSideDrawer={toggleSideDrawer}
                 onMouseMove={onBarMouseMove}
                 onMouseOver={onBarMouseMove}
+                onContextMenu={onContextMenu}
+                onTouchStart={onTouchStart}
+                onTouchEnd={onTouchEnd}
             />
             {
                 nextVideoPopupOpen ?
@@ -797,7 +896,7 @@ const Player = ({ urlParams, queryParams }) => {
                     <OptionsMenu
                         className={classnames(styles['layer'], styles['menu-layer'])}
                         stream={player.selected.stream}
-                        playbackDevices={streamingServer.playbackDevices !== null && streamingServer.playbackDevices.type === 'Ready' ? streamingServer.playbackDevices.content : []}
+                        playbackDevices={playbackDevices}
                     />
                     :
                     null
