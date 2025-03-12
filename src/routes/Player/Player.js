@@ -83,6 +83,8 @@ const Player = ({ urlParams, queryParams }) => {
     const defaultSubtitlesSelected = React.useRef(false);
     const defaultAudioTrackSelected = React.useRef(false);
     const [error, setError] = React.useState(null);
+    const [previousSubtitlesTrackId, setPreviousSubtitlesTrackId] = React.useState(null);
+
 
     const onImplementationChanged = React.useCallback(() => {
         video.setProp('subtitlesSize', settings.subtitlesSize);
@@ -194,6 +196,12 @@ const Player = ({ urlParams, queryParams }) => {
 
     const onExtraSubtitlesDelayChanged = React.useCallback((delay) => {
         video.setProp('extraSubtitlesDelay', delay);
+    }, []);
+
+    const onSubtitlesTrackSelected = React.useCallback((id) => {
+        video.setProp('selectedSubtitlesTrackId', id);
+        video.setProp('selectedExtraSubtitlesTrackId', null);
+        setPreviousSubtitlesTrackId(id);
     }, []);
 
     const onSubtitlesSizeChanged = React.useCallback((size) => {
@@ -527,6 +535,21 @@ const Player = ({ urlParams, queryParams }) => {
 
                     break;
                 }
+                case 'KeyC': {
+                    if (!menusOpen && !nextVideoPopupOpen) {
+                         if (video.state.selectedSubtitlesTrackId !== null) {
+                            onSubtitlesTrackSelected(null);
+                        } else if (previousSubtitlesTrackId !== null) {
+                            onSubtitlesTrackSelected(previousSubtitlesTrackId);
+                        } else if (video.state.subtitlesTracks.length > 0) {
+                            onSubtitlesTrackSelected(video.state.subtitlesTracks[0].id);
+                        } else if (video.state.extraSubtitlesTracks.length > 0) {
+                            onExtraSubtitlesTrackSelected(video.state.extraSubtitlesTracks[0].id);
+                        }
+                    }
+                    break;
+                }
+                
                 case 'KeyA': {
                     closeMenus();
                     if (Array.isArray(video.state.audioTracks) && video.state.audioTracks.length > 0) {
