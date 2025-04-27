@@ -269,7 +269,7 @@ const Intro = ({ queryParams }) => {
                     <Image className={styles['logo']} src={require('/images/logo.png')} alt={' '} />
                 </div>
                 <div className={styles['title-container']}>
-                    Freedom to Stream
+                    Stream unlimited
                 </div>
                 <div className={styles['slogan-container']}>
                     All the Video Content You Enjoy in One Place
